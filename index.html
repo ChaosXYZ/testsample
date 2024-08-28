@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Query Validator</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -45,23 +44,22 @@
             cursor: pointer;
             border-radius: 4px;
         }
-        .notification {
+        .flash-messages {
             position: fixed;
             top: 20px;
             right: 20px;
+            max-width: 300px;
+        }
+        .flash-message {
             padding: 15px;
             border-radius: 4px;
             color: white;
-            opacity: 0;
-            transition: opacity 0.5s;
+            margin-bottom: 10px;
         }
-        .notification.show {
-            opacity: 1;
-        }
-        .success {
+        .flash-message.success {
             background-color: #4CAF50;
         }
-        .error {
+        .flash-message.error {
             background-color: #f44336;
         }
     </style>
@@ -69,35 +67,19 @@
 <body>
     <div class="container">
         <h1>Query Validator</h1>
-        <textarea id="query" placeholder="Enter your query here"></textarea>
-        <button onclick="validateQuery()">Validate</button>
+        <form method="POST">
+            <textarea name="query" placeholder="Enter your query here"></textarea>
+            <button type="submit">Validate</button>
+        </form>
     </div>
-    <div id="notification" class="notification"></div>
-    <script>
-        function validateQuery() {
-            const query = document.getElementById('query').value;
-            axios.post('/validate', new URLSearchParams({query: query}))
-                .then(function (response) {
-                    const data = response.data;
-                    if (data.ResponseCode === 200) {
-                        showNotification('Success', data.Message, 'success');
-                    } else {
-                        showNotification('Error', data.Message, 'error');
-                    }
-                })
-                .catch(function (error) {
-                    showNotification('Error', 'An error occurred', 'error');
-                });
-        }
-
-        function showNotification(title, message, type) {
-            const notification = document.getElementById('notification');
-            notification.textContent = `${title}: ${message}`;
-            notification.className = `notification ${type} show`;
-            setTimeout(() => {
-                notification.className = 'notification';
-            }, 5000);
-        }
-    </script>
+    <div class="flash-messages">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+                {% for category, message in messages %}
+                    <div class="flash-message {{ category }}">{{ message }}</div>
+                {% endfor %}
+            {% endif %}
+        {% endwith %}
+    </div>
 </body>
 </html>
