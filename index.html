@@ -3,287 +3,101 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal Sprint Board</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/Sortable/1.14.0/Sortable.min.js"></script>
+    <title>Query Validator</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.21.1/axios.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
             margin: 0;
-            padding: 20px;
-            color: #333;
+            background-color: #f0f0f0;
+        }
+        .container {
+            background-color: white;
+            padding: 2rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
         h1 {
-            text-align: center;
-            color: #0052cc;
-        }
-        .board {
-            display: flex;
-            justify-content: space-around;
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .column {
-            background-color: #ebecf0;
-            border-radius: 5px;
-            width: 30%;
-            padding: 10px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .column h2 {
             margin-top: 0;
-            padding: 10px;
-            background-color: #dfe1e6;
-            border-radius: 3px;
-            font-size: 18px;
-            color: #172b4d;
         }
-        .ticket {
-            background-color: white;
-            border-radius: 3px;
-            padding: 10px;
-            margin-bottom: 10px;
-            cursor: move;
-            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-            transition: box-shadow 0.3s ease;
-        }
-        .ticket:hover {
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
-        }
-        .ticket-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        .add-ticket {
-            display: block;
+        textarea {
             width: 100%;
-            padding: 10px;
-            background-color: #0052cc;
-            color: white;
+            height: 100px;
+            margin-bottom: 1rem;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
             border: none;
-            border-radius: 3px;
+            color: white;
+            padding: 0.5rem 1rem;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 16px;
+            margin: 4px 2px;
             cursor: pointer;
-            transition: background-color 0.3s ease;
+            border-radius: 4px;
         }
-        .add-ticket:hover {
-            background-color: #0065ff;
-        }
-        .modal {
-            display: none;
+        .notification {
             position: fixed;
-            z-index: 1;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.4);
-        }
-        .modal-content {
-            background-color: #fefefe;
-            margin: 15% auto;
-            padding: 20px;
-            border: 1px solid #888;
-            width: 80%;
-            max-width: 500px;
-            border-radius: 5px;
-            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
-        }
-        .close {
-            color: #aaa;
-            float: right;
-            font-size: 28px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .close:hover {
-            color: #000;
-        }
-        #modalChecklist {
-            margin-top: 10px;
-        }
-        #modalChecklist div {
-            margin-bottom: 5px;
-        }
-        .delete-ticket {
-            background-color: #ff4d4f;
+            top: 20px;
+            right: 20px;
+            padding: 15px;
+            border-radius: 4px;
             color: white;
-            border: none;
-            padding: 5px 10px;
-            border-radius: 3px;
-            cursor: pointer;
-            float: right;
+            opacity: 0;
+            transition: opacity 0.5s;
         }
-        .delete-ticket:hover {
-            background-color: #ff7875;
+        .notification.show {
+            opacity: 1;
+        }
+        .success {
+            background-color: #4CAF50;
+        }
+        .error {
+            background-color: #f44336;
         }
     </style>
 </head>
 <body>
-    <h1>Personal Sprint Board</h1>
-    <div class="board">
-        <div class="column" id="todo">
-            <h2>To Do</h2>
-            <div class="tickets"></div>
-            <button class="add-ticket" onclick="addTicket('todo')">Add Ticket</button>
-        </div>
-        <div class="column" id="in_progress">
-            <h2>In Progress</h2>
-            <div class="tickets"></div>
-        </div>
-        <div class="column" id="done">
-            <h2>Done</h2>
-            <div class="tickets"></div>
-        </div>
+    <div class="container">
+        <h1>Query Validator</h1>
+        <textarea id="query" placeholder="Enter your query here"></textarea>
+        <button onclick="validateQuery()">Validate</button>
     </div>
-
-    <div id="ticketModal" class="modal">
-        <div class="modal-content">
-            <span class="close">&times;</span>
-            <h2 id="modalTitle"></h2>
-            <div id="modalChecklist"></div>
-            <button onclick="addChecklistItem()" style="margin-top: 10px;">Add Checklist Item</button>
-        </div>
-    </div>
-
+    <div id="notification" class="notification"></div>
     <script>
-        let currentTicket = null;
-
-        function initializeSortable() {
-            document.querySelectorAll('.column .tickets').forEach(column => {
-                new Sortable(column, {
-                    group: 'shared',
-                    animation: 150,
-                    onEnd: function (evt) {
-                        const ticketId = evt.item.id;
-                        const fromColumn = evt.from.parentElement.id;
-                        const toColumn = evt.to.parentElement.id;
-                        moveTicket(ticketId, fromColumn, toColumn);
+        function validateQuery() {
+            const query = document.getElementById('query').value;
+            axios.post('/validate', new URLSearchParams({query: query}))
+                .then(function (response) {
+                    const data = response.data;
+                    if (data.ResponseCode === 200) {
+                        showNotification('Success', data.Message, 'success');
+                    } else {
+                        showNotification('Error', data.Message, 'error');
                     }
+                })
+                .catch(function (error) {
+                    showNotification('Error', 'An error occurred', 'error');
                 });
-            });
         }
 
-        function loadBoard() {
-            axios.get('/get_tickets')
-                .then(response => {
-                    const board = response.data;
-                    Object.keys(board).forEach(columnId => {
-                        const column = document.querySelector(`#${columnId} .tickets`);
-                        column.innerHTML = '';
-                        board[columnId].forEach(ticket => {
-                            const ticketElement = createTicketElement(ticket, columnId);
-                            column.appendChild(ticketElement);
-                        });
-                    });
-                    initializeSortable();
-                })
-                .catch(error => console.error('Error loading board:', error));
+        function showNotification(title, message, type) {
+            const notification = document.getElementById('notification');
+            notification.textContent = `${title}: ${message}`;
+            notification.className = `notification ${type} show`;
+            setTimeout(() => {
+                notification.className = 'notification';
+            }, 5000);
         }
-
-        function createTicketElement(ticket, columnId) {
-            const ticketElement = document.createElement('div');
-            ticketElement.id = ticket.id;
-            ticketElement.className = 'ticket';
-            ticketElement.innerHTML = `
-                <div class="ticket-title">${ticket.title}</div>
-                <button class="delete-ticket" onclick="deleteTicket('${ticket.id}', '${columnId}')">Delete</button>
-            `;
-            ticketElement.onclick = (e) => {
-                if (!e.target.classList.contains('delete-ticket')) {
-                    openModal(ticket.id, ticket.title, ticket.checklist);
-                }
-            };
-            return ticketElement;
-        }
-
-        function addTicket(column) {
-            const title = prompt('Enter ticket title:');
-            if (title) {
-                const ticketId = `ticket-${Date.now()}`;
-                axios.post('/add_ticket', {
-                    column: column,
-                    title: title,
-                    id: ticketId
-                })
-                .then(() => loadBoard())
-                .catch(error => console.error('Error adding ticket:', error));
-            }
-        }
-
-        function deleteTicket(ticketId, column) {
-            if (confirm('Are you sure you want to delete this ticket?')) {
-                axios.post('/delete_ticket', {
-                    column: column,
-                    ticketId: ticketId
-                })
-                .then(() => loadBoard())
-                .catch(error => console.error('Error deleting ticket:', error));
-            }
-        }
-
-        function moveTicket(ticketId, fromColumn, toColumn) {
-            axios.post('/move_ticket', {
-                from: fromColumn,
-                to: toColumn,
-                ticketId: ticketId
-            })
-            .then(() => loadBoard())
-            .catch(error => console.error('Error moving ticket:', error));
-        }
-
-        function openModal(ticketId, title, checklist) {
-            currentTicket = ticketId;
-            document.getElementById('modalTitle').textContent = title;
-            const checklistContainer = document.getElementById('modalChecklist');
-            checklistContainer.innerHTML = '';
-            checklist.forEach(item => {
-                const checklistItem = document.createElement('div');
-                checklistItem.innerHTML = `
-                    <input type="checkbox" id="${item.id}" ${item.checked ? 'checked' : ''} onchange="toggleChecklistItem('${ticketId}', '${item.id}')">
-                    <label for="${item.id}">${item.text}</label>
-                `;
-                checklistContainer.appendChild(checklistItem);
-            });
-            document.getElementById('ticketModal').style.display = 'block';
-        }
-
-        document.querySelector('.close').onclick = function() {
-            document.getElementById('ticketModal').style.display = 'none';
-        }
-
-        window.onclick = function(event) {
-            if (event.target == document.getElementById('ticketModal')) {
-                document.getElementById('ticketModal').style.display = 'none';
-            }
-        }
-
-        function addChecklistItem() {
-            const item = prompt('Enter checklist item:');
-            if (item) {
-                axios.post('/add_checklist_item', {
-                    ticketId: currentTicket,
-                    item: item
-                })
-                .then(() => {
-                    loadBoard();
-                    openModal(currentTicket, document.getElementById('modalTitle').textContent, []);
-                })
-                .catch(error => console.error('Error adding checklist item:', error));
-            }
-        }
-
-        function toggleChecklistItem(ticketId, itemId) {
-            axios.post('/toggle_checklist_item', {
-                ticketId: ticketId,
-                itemId: itemId
-            })
-            .then(() => loadBoard())
-            .catch(error => console.error('Error toggling checklist item:', error));
-        }
-
-        // Load the board when the page loads
-        loadBoard();
     </script>
 </body>
 </html>
