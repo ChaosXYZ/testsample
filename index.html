@@ -1,85 +1,52 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Query Validator</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #f0f0f0;
-        }
-        .container {
-            background-color: white;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-        h1 {
-            margin-top: 0;
-        }
-        textarea {
-            width: 100%;
-            height: 100px;
-            margin-bottom: 1rem;
-            padding: 0.5rem;
-            border: 1px solid #ccc;
-            border-radius: 4px;
-        }
-        button {
-            background-color: #4CAF50;
-            border: none;
-            color: white;
-            padding: 0.5rem 1rem;
-            text-align: center;
-            text-decoration: none;
-            display: inline-block;
-            font-size: 16px;
-            margin: 4px 2px;
-            cursor: pointer;
-            border-radius: 4px;
-        }
-        .flash-messages {
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            max-width: 300px;
-        }
-        .flash-message {
-            padding: 15px;
-            border-radius: 4px;
-            color: white;
-            margin-bottom: 10px;
-        }
-        .flash-message.success {
-            background-color: #4CAF50;
-        }
-        .flash-message.error {
-            background-color: #f44336;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Query Validator</h1>
-        <form method="POST">
-            <textarea name="query" placeholder="Enter your query here"></textarea>
-            <button type="submit">Validate</button>
-        </form>
-    </div>
-    <div class="flash-messages">
-        {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-                {% for category, message in messages %}
-                    <div class="flash-message {{ category }}">{{ message }}</div>
-                {% endfor %}
-            {% endif %}
-        {% endwith %}
-    </div>
-</body>
-</html>
+```python
+def extract_conditions(query_lines, supported_operators):
+    results = []
+    for line in query_lines:
+        # Split the line into parts, preserving quoted strings
+        parts = re.findall(r"'[^']*'|\S+", line)
+        
+        i = 0
+        while i < len(parts):
+            if parts[i] in ('AND', 'OR', '(', ')'):
+                i += 1
+                continue
+            
+            if i + 2 < len(parts) and parts[i+1].upper() in supported_operators:
+                attribute = parts[i]
+                operator = parts[i+1].upper()
+                
+                # Handle the value part
+                if operator == 'IN' and parts[i+2].startswith('('):
+                    # Handle list of values in parentheses
+                    value_parts = [parts[i+2]]
+                    j = i + 3
+                    while j < len(parts) and not parts[j].endswith(')'):
+                        value_parts.append(parts[j])
+                        j += 1
+                    value_parts.append(parts[j])  # Add the closing parenthesis
+                    value = ' '.join(value_parts)
+                    i = j + 1
+                elif parts[i+2].startswith("'"):
+                    # Handle quoted string values
+                    value_parts = [parts[i+2]]
+                    j = i + 3
+                    while j < len(parts) and not parts[j-1].endswith("'"):
+                        value_parts.append(parts[j])
+                        j += 1
+                    value = ' '.join(value_parts).strip("'")
+                    i = j
+                else:
+                    value = parts[i+2]
+                    i += 3
+                
+                results.append({
+                    'Attribute': attribute,
+                    'Operator': operator,
+                    'Value': value
+                })
+            else:
+                i += 1
+    
+    return results
+
+```
