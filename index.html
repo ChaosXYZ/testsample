@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Basic 3D Game Prototype</title>
+    <title>Enhanced Basic 3D Game Prototype</title>
     <style>
         body { margin: 0; overflow: hidden; }
         #info {
@@ -18,7 +18,7 @@
 </head>
 <body>
     <div id="info">
-        <h1>Basic 3D Game Prototype</h1>
+        <h1>Enhanced Basic 3D Game Prototype</h1>
         <p>Use WASD or arrow keys to move. Click to shoot.</p>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
@@ -56,19 +56,39 @@
         floor.rotation.x = -Math.PI / 2;
         scene.add(floor);
 
-        // Player
-        const playerSize = 1;
-        const playerGeometry = new THREE.BoxGeometry(playerSize, playerSize, playerSize);
-        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
-        const player = new THREE.Mesh(playerGeometry, playerMaterial);
-        player.position.y = playerSize / 2;
+        // Player (Gun Model)
+        const player = new THREE.Group();
+
+        // Gun Base
+        const gunBaseGeometry = new THREE.BoxGeometry(0.5, 0.2, 1);
+        const gunBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
+        const gunBase = new THREE.Mesh(gunBaseGeometry, gunBaseMaterial);
+        gunBase.position.set(0, 0, 0);
+        player.add(gunBase);
+
+        // Gun Barrel
+        const gunBarrelGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
+        const gunBarrelMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
+        const gunBarrel = new THREE.Mesh(gunBarrelGeometry, gunBarrelMaterial);
+        gunBarrel.rotation.z = Math.PI / 2;
+        gunBarrel.position.set(0.25, 0, 0);
+        player.add(gunBarrel);
+
+        // Gun Handle
+        const gunHandleGeometry = new THREE.BoxGeometry(0.2, 0.5, 0.2);
+        const gunHandleMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
+        const gunHandle = new THREE.Mesh(gunHandleGeometry, gunHandleMaterial);
+        gunHandle.position.set(-0.2, -0.15, 0);
+        player.add(gunHandle);
+
+        player.position.set(0, 0.5, 5);
         scene.add(player);
 
         // Obstacles
         const obstacles = [];
         const obstacleGeometry = new THREE.BoxGeometry(2, 2, 2);
         const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < 20; i++) {
             const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
             obstacle.position.set(
                 (Math.random() - 0.5) * 50,
@@ -83,7 +103,7 @@
         const enemies = [];
         const enemyGeometry = new THREE.SphereGeometry(0.5, 16, 16);
         const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
-        const enemyCount = 5;
+        const enemyCount = 10;
         for (let i = 0; i < enemyCount; i++) {
             const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
             resetEnemyPosition(enemy);
@@ -123,7 +143,9 @@
         function shoot() {
             const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
             // Start at player's position
-            bullet.position.set(player.position.x, player.position.y + 0.5, player.position.z);
+            const gunWorldPosition = new THREE.Vector3();
+            player.getWorldPosition(gunWorldPosition);
+            bullet.position.set(gunWorldPosition.x + 0.5, gunWorldPosition.y, gunWorldPosition.z);
             // Direction: camera's forward vector
             const direction = new THREE.Vector3();
             camera.getWorldDirection(direction);
@@ -137,12 +159,8 @@
 
         // Collision Detection Helper
         function checkCollision(obj1, obj2) {
-            obj1.geometry.computeBoundingBox();
-            obj2.geometry.computeBoundingBox();
-            const box1 = obj1.geometry.boundingBox.clone();
-            box1.applyMatrix4(obj1.matrixWorld);
-            const box2 = obj2.geometry.boundingBox.clone();
-            box2.applyMatrix4(obj2.matrixWorld);
+            const box1 = new THREE.Box3().setFromObject(obj1);
+            const box2 = new THREE.Box3().setFromObject(obj2);
             return box1.intersectsBox(box2);
         }
 
@@ -160,10 +178,37 @@
             if (keysPressed['a'] || keysPressed['arrowleft']) moveX -= moveSpeed;
             if (keysPressed['d'] || keysPressed['arrowright']) moveX += moveSpeed;
 
-            player.position.x += moveX;
-            player.position.z += moveZ;
+            // Attempt to move along X axis
+            if (moveX !== 0) {
+                player.position.x += moveX;
+                let collision = false;
+                for (let obstacle of obstacles) {
+                    if (checkCollision(player, obstacle)) {
+                        collision = true;
+                        break;
+                    }
+                }
+                if (collision) {
+                    player.position.x -= moveX;
+                }
+            }
 
-            // Camera follows the player
+            // Attempt to move along Z axis
+            if (moveZ !== 0) {
+                player.position.z += moveZ;
+                let collision = false;
+                for (let obstacle of obstacles) {
+                    if (checkCollision(player, obstacle)) {
+                        collision = true;
+                        break;
+                    }
+                }
+                if (collision) {
+                    player.position.z -= moveZ;
+                }
+            }
+
+            // Update camera to follow the player
             camera.position.x = player.position.x;
             camera.position.z = player.position.z + 5;
             camera.lookAt(player.position.x, player.position.y, player.position.z);
@@ -172,7 +217,10 @@
             enemies.forEach(enemy => {
                 const direction = new THREE.Vector3();
                 direction.subVectors(player.position, enemy.position).normalize();
-                enemy.position.add(direction.multiplyScalar(5 * delta));
+                enemy.position.add(direction.multiplyScalar(2 * delta)); // Slowed down speed
+
+                // Keep enemies on the ground
+                enemy.position.y = 0.5;
 
                 // Simple collision with player
                 if (checkCollision(enemy, player)) {
@@ -180,8 +228,13 @@
                     resetGame();
                 }
 
-                // Keep enemies on the ground
-                enemy.position.y = 0.5;
+                // Collision with obstacles for enemies
+                obstacles.forEach(obstacle => {
+                    if (checkCollision(enemy, obstacle)) {
+                        // Move enemy back
+                        enemy.position.sub(direction.multiplyScalar(2 * delta));
+                    }
+                });
             });
 
             // Bullets Movement
@@ -192,8 +245,8 @@
                 // Update position
                 bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(delta));
 
-                // Remove bullet if it goes below the floor
-                if (bullet.position.y < 0) {
+                // Remove bullet if it goes below the floor or out of bounds
+                if (bullet.position.y < 0 || Math.abs(bullet.position.x) > 100 || Math.abs(bullet.position.z) > 100) {
                     scene.remove(bullet);
                     bullets.splice(i, 1);
                     continue;
@@ -213,24 +266,7 @@
                 }
             }
 
-            // Collision with obstacles for player
-            obstacles.forEach(obstacle => {
-                if (checkCollision(player, obstacle)) {
-                    // Simple collision response: move player back
-                    player.position.x -= moveX;
-                    player.position.z -= moveZ;
-                }
-            });
-
-            // Collision with obstacles for enemies
-            enemies.forEach(enemy => {
-                obstacles.forEach(obstacle => {
-                    if (checkCollision(enemy, obstacle)) {
-                        // Move enemy back
-                        enemy.position.sub(enemy.userData.velocity ? enemy.userData.velocity.clone().multiplyScalar(delta) : new THREE.Vector3(0,0,0));
-                    }
-                });
-            });
+            // Collision with obstacles for player is already handled during movement
 
             // Respawn enemies if all are destroyed
             if (enemies.length === 0) {
@@ -248,7 +284,7 @@
 
         function resetGame() {
             // Reset player position
-            player.position.set(0, playerSize / 2, 5);
+            player.position.set(0, 0.5, 5);
             // Remove all enemies
             enemies.forEach(enemy => scene.remove(enemy));
             enemies.length = 0;
