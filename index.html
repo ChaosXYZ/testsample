@@ -2,24 +2,97 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Enhanced 3D Game Prototype with First-Person Camera</title>
+    <title>Enhanced 3D Game Prototype with Leaderboard</title>
     <style>
-        body { margin: 0; overflow: hidden; }
+        body { margin: 0; overflow: hidden; background-color: #202020; color: #ffffff; font-family: Arial, sans-serif; }
         #info {
             position: absolute;
             top: 10px;
             left: 10px;
-            width: 100%;
-            color: #ffffff;
-            font-family: Arial, sans-serif;
             z-index: 1;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #score {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            z-index: 1;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px;
+            border-radius: 5px;
+        }
+        #leaderboard {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            z-index: 1;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+        h1, h2 {
+            margin: 0 0 10px 0;
+            font-size: 18px;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        li {
+            margin-bottom: 5px;
+        }
+        #gameOver {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            z-index: 2;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 10px;
+            display: none;
+        }
+        #gameOver input {
+            padding: 5px;
+            margin-top: 10px;
+            width: 80%;
+            border: none;
+            border-radius: 3px;
+        }
+        #gameOver button {
+            padding: 5px 10px;
+            margin-top: 10px;
+            border: none;
+            border-radius: 3px;
+            background: #00ff00;
+            cursor: pointer;
         }
     </style>
 </head>
 <body>
     <div id="info">
-        <h1>Enhanced 3D Game Prototype</h1>
-        <p>Use WASD or arrow keys to move. Click to shoot. Move the mouse to look around.</p>
+        <h1>3D Shooter Game</h1>
+        <p>Use WASD or arrow keys to move.<br>Click and drag the mouse to look around.<br>Left-click to shoot.</p>
+    </div>
+    <div id="score">
+        <h2>Score: <span id="currentScore">0</span></h2>
+    </div>
+    <div id="leaderboard">
+        <h2>Leaderboard</h2>
+        <ul id="leaderboardList">
+            <!-- High scores will be populated here -->
+        </ul>
+    </div>
+    <div id="gameOver">
+        <h1>Game Over!</h1>
+        <p>Your Score: <span id="finalScore">0</span></p>
+        <input type="text" id="playerName" placeholder="Enter your name" maxlength="10">
+        <button id="submitScore">Submit</button>
     </div>
     <!-- Include Three.js r128 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -131,7 +204,6 @@
 
         // Controls
         const keysPressed = {};
-
         document.addEventListener('keydown', (event) => {
             keysPressed[event.key.toLowerCase()] = true;
         });
@@ -142,38 +214,32 @@
 
         // Mouse Movement for Camera Rotation
         let isMouseDown = false;
-        let prevMouseX = 0;
-        let prevMouseY = 0;
         const rotationSpeed = 0.002;
 
         document.addEventListener('mousedown', (event) => {
-            isMouseDown = true;
+            if (event.button === 0) { // Left mouse button
+                isMouseDown = true;
+                shoot(); // Shoot on left-click
+            }
         });
 
         document.addEventListener('mouseup', (event) => {
-            isMouseDown = false;
+            if (event.button === 0) { // Left mouse button
+                isMouseDown = false;
+            }
         });
 
         document.addEventListener('mousemove', (event) => {
             if (isMouseDown) {
                 const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
-                const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
-
+                // Only horizontal rotation (yaw)
                 camera.rotation.y -= movementX * rotationSpeed;
-                camera.rotation.x -= movementY * rotationSpeed;
-
-                // Limit vertical rotation to prevent flipping
-                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+                // Prevent vertical rotation
+                // Remove vertical rotation updates
             }
         });
 
-        // Shooting
-        document.addEventListener('mousedown', (event) => {
-            if (event.button === 0) { // Left mouse button
-                shoot();
-            }
-        });
-
+        // Shooting Function
         function shoot() {
             const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
 
@@ -203,19 +269,77 @@
             return box1.intersectsBox(box2);
         }
 
+        // Score and Leaderboard
+        let score = 0;
+        const currentScoreElement = document.getElementById('currentScore');
+        const leaderboardList = document.getElementById('leaderboardList');
+        const gameOverScreen = document.getElementById('gameOver');
+        const finalScoreElement = document.getElementById('finalScore');
+        const submitScoreButton = document.getElementById('submitScore');
+        const playerNameInput = document.getElementById('playerName');
+
+        function updateScore(amount) {
+            score += amount;
+            currentScoreElement.textContent = score;
+        }
+
+        function loadLeaderboard() {
+            const highScores = JSON.parse(localStorage.getItem('highScores')) || [];
+            leaderboardList.innerHTML = '';
+            highScores.forEach((entry, index) => {
+                const li = document.createElement('li');
+                li.textContent = `${index + 1}. ${entry.name} - ${entry.score}`;
+                leaderboardList.appendChild(li);
+            });
+        }
+
+        function addToLeaderboard(name, score) {
+            const highScores = JSON.parse(localStorage.getItem('highScores')) || [];
+            highScores.push({ name, score });
+            highScores.sort((a, b) => b.score - a.score);
+            if (highScores.length > 5) highScores.pop(); // Keep top 5
+            localStorage.setItem('highScores', JSON.stringify(highScores));
+            loadLeaderboard();
+        }
+
+        // Game Over Handling
+        function gameOver() {
+            gameOverScreen.style.display = 'block';
+            finalScoreElement.textContent = score;
+        }
+
+        submitScoreButton.addEventListener('click', () => {
+            const name = playerNameInput.value.trim() || 'Anonymous';
+            addToLeaderboard(name, score);
+            gameOverScreen.style.display = 'none';
+            resetGame();
+        });
+
+        // Player Movement Variables
+        const moveSpeed = 10; // Units per second
+        const velocity = new THREE.Vector3();
+
+        // Movement Limits
+        const boundary = {
+            minX: -25,
+            maxX: 25,
+            minZ: -25,
+            maxZ: 25
+        };
+
         // Game Loop
         const clock = new THREE.Clock();
 
         function animate() {
             const delta = clock.getDelta();
 
-            // Player Movement
-            const moveSpeed = 10 * delta;
-            let moveX = 0, moveZ = 0;
-            if (keysPressed['w'] || keysPressed['arrowup']) moveZ -= moveSpeed;
-            if (keysPressed['s'] || keysPressed['arrowdown']) moveZ += moveSpeed;
-            if (keysPressed['a'] || keysPressed['arrowleft']) moveX -= moveSpeed;
-            if (keysPressed['d'] || keysPressed['arrowright']) moveX += moveSpeed;
+            // Player Movement with Smoothness
+            velocity.set(0, 0, 0);
+            if (keysPressed['w'] || keysPressed['arrowup']) velocity.z -= 1;
+            if (keysPressed['s'] || keysPressed['arrowdown']) velocity.z += 1;
+            if (keysPressed['a'] || keysPressed['arrowleft']) velocity.x -= 1;
+            if (keysPressed['d'] || keysPressed['arrowright']) velocity.x += 1;
+            velocity.normalize().multiplyScalar(moveSpeed * delta);
 
             // Calculate movement direction based on camera rotation
             const direction = new THREE.Vector3();
@@ -227,20 +351,15 @@
             right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
 
             const moveVector = new THREE.Vector3();
-            moveVector.addScaledVector(direction, moveZ);
-            moveVector.addScaledVector(right, moveX);
+            moveVector.addScaledVector(direction, velocity.z);
+            moveVector.addScaledVector(right, velocity.x);
 
-            // Attempt to move the camera
+            // Update camera position
             camera.position.add(moveVector);
 
-            // Collision detection for camera with obstacles
-            for (let obstacle of obstacles) {
-                if (checkCollision(camera, obstacle)) {
-                    // Revert movement
-                    camera.position.sub(moveVector);
-                    break;
-                }
-            }
+            // Bound the player within the defined area
+            camera.position.x = Math.max(boundary.minX, Math.min(boundary.maxX, camera.position.x));
+            camera.position.z = Math.max(boundary.minZ, Math.min(boundary.maxZ, camera.position.z));
 
             // Enemies Movement
             enemies.forEach(enemy => {
@@ -253,15 +372,14 @@
 
                 // Simple collision with player (camera)
                 if (checkCollision(enemy, camera)) {
-                    alert("Game Over!");
-                    resetGame();
+                    gameOver();
                 }
 
                 // Collision with obstacles for enemies
                 obstacles.forEach(obstacle => {
                     if (checkCollision(enemy, obstacle)) {
                         // Move enemy back
-                        enemy.position.sub(enemyDirection.multiplyScalar(2 * delta));
+                        enemy.position.sub(enemyDirection.clone().multiplyScalar(2 * delta));
                     }
                 });
             });
@@ -290,6 +408,7 @@
                         enemies.splice(j, 1);
                         scene.remove(bullet);
                         bullets.splice(i, 1);
+                        updateScore(10); // Increment score
                         break;
                     }
                 }
@@ -327,7 +446,14 @@
             // Remove all bullets
             bullets.forEach(bullet => scene.remove(bullet));
             bullets.length = 0;
+
+            // Reset score
+            score = 0;
+            currentScoreElement.textContent = score;
         }
+
+        // Initialize Leaderboard
+        loadLeaderboard();
 
         animate();
     </script>
