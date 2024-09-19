@@ -1,52 +1,259 @@
-```python
-def extract_conditions(query_lines, supported_operators):
-    results = []
-    for line in query_lines:
-        # Split the line into parts, preserving quoted strings
-        parts = re.findall(r"'[^']*'|\S+", line)
-        
-        i = 0
-        while i < len(parts):
-            if parts[i] in ('AND', 'OR', '(', ')'):
-                i += 1
-                continue
-            
-            if i + 2 < len(parts) and parts[i+1].upper() in supported_operators:
-                attribute = parts[i]
-                operator = parts[i+1].upper()
-                
-                # Handle the value part
-                if operator == 'IN' and parts[i+2].startswith('('):
-                    # Handle list of values in parentheses
-                    value_parts = [parts[i+2]]
-                    j = i + 3
-                    while j < len(parts) and not parts[j].endswith(')'):
-                        value_parts.append(parts[j])
-                        j += 1
-                    value_parts.append(parts[j])  # Add the closing parenthesis
-                    value = ' '.join(value_parts)
-                    i = j + 1
-                elif parts[i+2].startswith("'"):
-                    # Handle quoted string values
-                    value_parts = [parts[i+2]]
-                    j = i + 3
-                    while j < len(parts) and not parts[j-1].endswith("'"):
-                        value_parts.append(parts[j])
-                        j += 1
-                    value = ' '.join(value_parts).strip("'")
-                    i = j
-                else:
-                    value = parts[i+2]
-                    i += 3
-                
-                results.append({
-                    'Attribute': attribute,
-                    'Operator': operator,
-                    'Value': value
-                })
-            else:
-                i += 1
-    
-    return results
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Basic 3D Game with Three.js</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-family: Arial, sans-serif;
+            background: rgba(0,0,0,0.5);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 1;
+        }
+    </style>
+</head>
+<body>
+    <div id="info">
+        <p><strong>Controls:</strong></p>
+        <p>Move: W/A/S/D or Arrow Keys</p>
+        <p>Shoot: Left Mouse Button</p>
+    </div>
+    <!-- Include Three.js via CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r146/three.min.js"></script>
+    <!-- Include PointerLockControls for better camera control -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r146/examples/js/controls/PointerLockControls.js"></script>
+    <script>
+        // Basic Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x20232a);
 
-```
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        document.body.appendChild(renderer.domElement);
+
+        // Lighting
+        const light = new THREE.DirectionalLight(0xffffff, 1);
+        light.position.set(5, 10, 7.5);
+        scene.add(light);
+
+        const ambientLight = new THREE.AmbientLight(0x404040); // soft white light
+        scene.add(ambientLight);
+
+        // Player Setup
+        const playerSize = 1;
+        const playerGeometry = new THREE.BoxGeometry(playerSize, playerSize, playerSize);
+        const playerMaterial = new THREE.MeshStandardMaterial({ color: 0x00ff00 });
+        const player = new THREE.Mesh(playerGeometry, playerMaterial);
+        player.position.set(0, playerSize / 2, 0);
+        scene.add(player);
+
+        camera.position.set(0, playerSize, -5);
+        camera.lookAt(player.position);
+
+        // Controls
+        const controls = new THREE.PointerLockControls(camera, document.body);
+
+        document.addEventListener('click', () => {
+            controls.lock();
+        }, false);
+
+        scene.add(controls.getObject());
+
+        // Movement Variables
+        const moveSpeed = 0.1;
+        const keysPressed = {};
+
+        document.addEventListener('keydown', (event) => {
+            keysPressed[event.code] = true;
+        }, false);
+
+        document.addEventListener('keyup', (event) => {
+            keysPressed[event.code] = false;
+        }, false);
+
+        // Environment Setup
+        const floorGeometry = new THREE.PlaneGeometry(100, 100);
+        const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x808080 });
+        const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+        floor.rotation.x = -Math.PI / 2;
+        scene.add(floor);
+
+        // Obstacles
+        const obstacles = [];
+        const obstacleGeometry = new THREE.BoxGeometry(2, 2, 2);
+        const obstacleMaterial = new THREE.MeshStandardMaterial({ color: 0x888888 });
+
+        for (let i = 0; i < 20; i++) {
+            const obstacle = new THREE.Mesh(obstacleGeometry, obstacleMaterial);
+            obstacle.position.set(
+                (Math.random() - 0.5) * 50,
+                1,
+                (Math.random() - 0.5) * 50
+            );
+            scene.add(obstacle);
+            obstacles.push(obstacle);
+        }
+
+        // Enemy Setup
+        const enemies = [];
+        const enemyGeometry = new THREE.SphereGeometry(1, 32, 32);
+        const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
+
+        for (let i = 0; i < 5; i++) {
+            const enemy = new THREE.Mesh(enemyGeometry, enemyMaterial);
+            enemy.position.set(
+                (Math.random() - 0.5) * 50,
+                1,
+                (Math.random() - 0.5) * 50
+            );
+            scene.add(enemy);
+            enemies.push({
+                mesh: enemy,
+                speed: 0.02
+            });
+        }
+
+        // Bullet Setup
+        const bullets = [];
+        const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const bulletMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+
+        // Shooting Mechanism
+        document.addEventListener('mousedown', (event) => {
+            if (event.button === 0) { // Left mouse button
+                const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
+                // Position bullet at player's position
+                bullet.position.copy(player.position);
+                // Direction is where the camera is looking
+                const direction = new THREE.Vector3();
+                camera.getWorldDirection(direction);
+                bullet.userData = {
+                    velocity: direction.multiplyScalar(0.5),
+                    gravity: new THREE.Vector3(0, -0.01, 0)
+                };
+                scene.add(bullet);
+                bullets.push(bullet);
+            }
+        }, false);
+
+        // Collision Detection Function
+        function checkCollision(obj1, obj2) {
+            const distance = obj1.position.distanceTo(obj2.position);
+            const minDistance = (obj1.geometry.boundingSphere.radius || 1) + (obj2.geometry.boundingSphere.radius || 1);
+            return distance < minDistance;
+        }
+
+        // Initialize bounding spheres
+        player.geometry.computeBoundingSphere();
+        obstacleGeometry.computeBoundingSphere();
+        enemyGeometry.computeBoundingSphere();
+        bulletGeometry.computeBoundingSphere();
+
+        // Animation Loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            // Player Movement
+            let moveX = 0;
+            let moveZ = 0;
+
+            if (keysPressed['KeyW'] || keysPressed['ArrowUp']) moveZ -= moveSpeed;
+            if (keysPressed['KeyS'] || keysPressed['ArrowDown']) moveZ += moveSpeed;
+            if (keysPressed['KeyA'] || keysPressed['ArrowLeft']) moveX -= moveSpeed;
+            if (keysPressed['KeyD'] || keysPressed['ArrowRight']) moveX += moveSpeed;
+
+            player.position.x += moveX;
+            player.position.z += moveZ;
+
+            // Update camera position to follow the player
+            camera.position.x = player.position.x;
+            camera.position.z = player.position.z - 5;
+            camera.lookAt(player.position);
+
+            // Enemy Behavior: Chase the player
+            enemies.forEach(enemy => {
+                const direction = new THREE.Vector3();
+                direction.subVectors(player.position, enemy.mesh.position).normalize();
+                enemy.mesh.position.add(direction.multiplyScalar(enemy.speed));
+
+                // Simple collision detection with player
+                if (checkCollision(player, enemy.mesh)) {
+                    alert("Game Over! An enemy has caught you.");
+                    window.location.reload();
+                }
+            });
+
+            // Bullets Update
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                const bullet = bullets[i];
+                // Update position
+                bullet.position.add(bullet.userData.velocity);
+                bullet.position.add(bullet.userData.gravity);
+                // Update velocity with gravity
+                bullet.userData.velocity.add(bullet.userData.gravity);
+
+                // Remove bullet if it goes below the floor
+                if (bullet.position.y < 0) {
+                    scene.remove(bullet);
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // Check collision with enemies
+                for (let j = enemies.length -1; j >=0; j--) {
+                    const enemy = enemies[j].mesh;
+                    if (checkCollision(bullet, enemy)) {
+                        // Remove enemy and bullet
+                        scene.remove(enemy);
+                        enemies.splice(j,1);
+                        scene.remove(bullet);
+                        bullets.splice(i,1);
+                        break;
+                    }
+                }
+            }
+
+            // Collision Detection with Obstacles (Player)
+            obstacles.forEach(obstacle => {
+                if (checkCollision(player, obstacle)) {
+                    // Simple response: move player back
+                    player.position.x -= moveX;
+                    player.position.z -= moveZ;
+                }
+            });
+
+            // Collision Detection with Obstacles (Enemies)
+            enemies.forEach(enemy => {
+                obstacles.forEach(obstacle => {
+                    if (checkCollision(enemy.mesh, obstacle)) {
+                        // Simple response: move enemy back
+                        const direction = new THREE.Vector3();
+                        direction.subVectors(player.position, enemy.mesh.position).normalize();
+                        enemy.mesh.position.add(direction.multiplyScalar(-enemy.speed));
+                    }
+                });
+            });
+
+            renderer.render(scene, camera);
+        }
+
+        animate();
+
+        // Handle Window Resize
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth/window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }, false);
+    </script>
+</body>
+</html>
