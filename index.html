@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Enhanced Basic 3D Game Prototype</title>
+    <title>Enhanced 3D Game Prototype with First-Person Camera</title>
     <style>
         body { margin: 0; overflow: hidden; }
         #info {
@@ -18,17 +18,18 @@
 </head>
 <body>
     <div id="info">
-        <h1>Enhanced Basic 3D Game Prototype</h1>
-        <p>Use WASD or arrow keys to move. Click to shoot.</p>
+        <h1>Enhanced 3D Game Prototype</h1>
+        <p>Use WASD or arrow keys to move. Click to shoot. Move the mouse to look around.</p>
     </div>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r152/three.min.js"></script>
+    <!-- Include Three.js r128 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script>
         // Basic Setup
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x202020);
 
         const camera = new THREE.PerspectiveCamera(75, window.innerWidth/window.innerHeight, 0.1, 1000);
-        camera.position.set(0, 2, 5);
+        camera.position.set(0, 1.6, 0); // Typical eye level height
 
         const renderer = new THREE.WebGLRenderer({ antialias: true });
         renderer.setSize(window.innerWidth, window.innerHeight);
@@ -57,32 +58,34 @@
         scene.add(floor);
 
         // Player (Gun Model)
-        const player = new THREE.Group();
+        const gun = new THREE.Group();
 
         // Gun Base
         const gunBaseGeometry = new THREE.BoxGeometry(0.5, 0.2, 1);
         const gunBaseMaterial = new THREE.MeshStandardMaterial({ color: 0x333333 });
         const gunBase = new THREE.Mesh(gunBaseGeometry, gunBaseMaterial);
-        gunBase.position.set(0, 0, 0);
-        player.add(gunBase);
+        gunBase.position.set(0, -0.1, -0.5);
+        gun.add(gunBase);
 
         // Gun Barrel
-        const gunBarrelGeometry = new THREE.CylinderGeometry(0.05, 0.05, 1, 8);
+        const gunBarrelGeometry = new THREE.CylinderGeometry(0.05, 0.05, 0.6, 8);
         const gunBarrelMaterial = new THREE.MeshStandardMaterial({ color: 0x555555 });
         const gunBarrel = new THREE.Mesh(gunBarrelGeometry, gunBarrelMaterial);
         gunBarrel.rotation.z = Math.PI / 2;
-        gunBarrel.position.set(0.25, 0, 0);
-        player.add(gunBarrel);
+        gunBarrel.position.set(0.3, 0, 0);
+        gun.add(gunBarrel);
 
         // Gun Handle
         const gunHandleGeometry = new THREE.BoxGeometry(0.2, 0.5, 0.2);
         const gunHandleMaterial = new THREE.MeshStandardMaterial({ color: 0x222222 });
         const gunHandle = new THREE.Mesh(gunHandleGeometry, gunHandleMaterial);
-        gunHandle.position.set(-0.2, -0.15, 0);
-        player.add(gunHandle);
+        gunHandle.position.set(-0.2, -0.25, 0);
+        gun.add(gunHandle);
 
-        player.position.set(0, 0.5, 5);
-        scene.add(player);
+        // Position the gun in front of the camera
+        gun.position.set(0, -0.5, -1); // Adjust as needed
+        camera.add(gun);
+        scene.add(camera); // Add camera to the scene
 
         // Obstacles
         const obstacles = [];
@@ -121,8 +124,10 @@
 
         // Bullets
         const bullets = [];
-        const bulletGeometry = new THREE.SphereGeometry(0.1, 8, 8);
+        const bulletGeometry = new THREE.SphereGeometry(0.05, 8, 8);
         const bulletMaterial = new THREE.MeshStandardMaterial({ color: 0xffff00 });
+        const bulletSpeed = 50; // Increased speed for straighter trajectory
+        const bulletGravity = -30; // Increased gravity for further drop
 
         // Controls
         const keysPressed = {};
@@ -135,24 +140,58 @@
             keysPressed[event.key.toLowerCase()] = false;
         });
 
+        // Mouse Movement for Camera Rotation
+        let isMouseDown = false;
+        let prevMouseX = 0;
+        let prevMouseY = 0;
+        const rotationSpeed = 0.002;
+
+        document.addEventListener('mousedown', (event) => {
+            isMouseDown = true;
+        });
+
+        document.addEventListener('mouseup', (event) => {
+            isMouseDown = false;
+        });
+
+        document.addEventListener('mousemove', (event) => {
+            if (isMouseDown) {
+                const movementX = event.movementX || event.mozMovementX || event.webkitMovementX || 0;
+                const movementY = event.movementY || event.mozMovementY || event.webkitMovementY || 0;
+
+                camera.rotation.y -= movementX * rotationSpeed;
+                camera.rotation.x -= movementY * rotationSpeed;
+
+                // Limit vertical rotation to prevent flipping
+                camera.rotation.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, camera.rotation.x));
+            }
+        });
+
         // Shooting
         document.addEventListener('mousedown', (event) => {
-            shoot();
+            if (event.button === 0) { // Left mouse button
+                shoot();
+            }
         });
 
         function shoot() {
             const bullet = new THREE.Mesh(bulletGeometry, bulletMaterial);
-            // Start at player's position
-            const gunWorldPosition = new THREE.Vector3();
-            player.getWorldPosition(gunWorldPosition);
-            bullet.position.set(gunWorldPosition.x + 0.5, gunWorldPosition.y, gunWorldPosition.z);
-            // Direction: camera's forward vector
+
+            // Get the camera's world direction
             const direction = new THREE.Vector3();
-            camera.getWorldDirection(direction);
+            camera.getWorldDirection(direction).normalize();
+
+            // Set bullet position to the gun's position
+            const gunWorldPosition = new THREE.Vector3();
+            gun.getWorldPosition(gunWorldPosition);
+            bullet.position.copy(gunWorldPosition);
+
+            // Set bullet velocity
             bullet.userData = {
-                velocity: direction.multiplyScalar(20), // Speed of bullet
-                gravity: new THREE.Vector3(0, -9.81, 0), // Gravity
+                velocity: direction.clone().multiplyScalar(bulletSpeed),
+                gravity: new THREE.Vector3(0, bulletGravity, 0)
             };
+
             scene.add(bullet);
             bullets.push(bullet);
         }
@@ -178,52 +217,42 @@
             if (keysPressed['a'] || keysPressed['arrowleft']) moveX -= moveSpeed;
             if (keysPressed['d'] || keysPressed['arrowright']) moveX += moveSpeed;
 
-            // Attempt to move along X axis
-            if (moveX !== 0) {
-                player.position.x += moveX;
-                let collision = false;
-                for (let obstacle of obstacles) {
-                    if (checkCollision(player, obstacle)) {
-                        collision = true;
-                        break;
-                    }
-                }
-                if (collision) {
-                    player.position.x -= moveX;
+            // Calculate movement direction based on camera rotation
+            const direction = new THREE.Vector3();
+            camera.getWorldDirection(direction);
+            direction.y = 0;
+            direction.normalize();
+
+            const right = new THREE.Vector3();
+            right.crossVectors(direction, new THREE.Vector3(0, 1, 0)).normalize();
+
+            const moveVector = new THREE.Vector3();
+            moveVector.addScaledVector(direction, moveZ);
+            moveVector.addScaledVector(right, moveX);
+
+            // Attempt to move the camera
+            camera.position.add(moveVector);
+
+            // Collision detection for camera with obstacles
+            for (let obstacle of obstacles) {
+                if (checkCollision(camera, obstacle)) {
+                    // Revert movement
+                    camera.position.sub(moveVector);
+                    break;
                 }
             }
-
-            // Attempt to move along Z axis
-            if (moveZ !== 0) {
-                player.position.z += moveZ;
-                let collision = false;
-                for (let obstacle of obstacles) {
-                    if (checkCollision(player, obstacle)) {
-                        collision = true;
-                        break;
-                    }
-                }
-                if (collision) {
-                    player.position.z -= moveZ;
-                }
-            }
-
-            // Update camera to follow the player
-            camera.position.x = player.position.x;
-            camera.position.z = player.position.z + 5;
-            camera.lookAt(player.position.x, player.position.y, player.position.z);
 
             // Enemies Movement
             enemies.forEach(enemy => {
-                const direction = new THREE.Vector3();
-                direction.subVectors(player.position, enemy.position).normalize();
-                enemy.position.add(direction.multiplyScalar(2 * delta)); // Slowed down speed
+                const enemyDirection = new THREE.Vector3();
+                enemyDirection.subVectors(camera.position, enemy.position).normalize();
+                enemy.position.add(enemyDirection.multiplyScalar(2 * delta)); // Slowed down speed
 
                 // Keep enemies on the ground
                 enemy.position.y = 0.5;
 
-                // Simple collision with player
-                if (checkCollision(enemy, player)) {
+                // Simple collision with player (camera)
+                if (checkCollision(enemy, camera)) {
                     alert("Game Over!");
                     resetGame();
                 }
@@ -232,7 +261,7 @@
                 obstacles.forEach(obstacle => {
                     if (checkCollision(enemy, obstacle)) {
                         // Move enemy back
-                        enemy.position.sub(direction.multiplyScalar(2 * delta));
+                        enemy.position.sub(enemyDirection.multiplyScalar(2 * delta));
                     }
                 });
             });
@@ -266,8 +295,6 @@
                 }
             }
 
-            // Collision with obstacles for player is already handled during movement
-
             // Respawn enemies if all are destroyed
             if (enemies.length === 0) {
                 for (let i = 0; i < enemyCount; i++) {
@@ -283,8 +310,10 @@
         }
 
         function resetGame() {
-            // Reset player position
-            player.position.set(0, 0.5, 5);
+            // Reset camera position and rotation
+            camera.position.set(0, 1.6, 0);
+            camera.rotation.set(0, 0, 0);
+
             // Remove all enemies
             enemies.forEach(enemy => scene.remove(enemy));
             enemies.length = 0;
